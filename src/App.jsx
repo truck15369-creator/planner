@@ -25,6 +25,25 @@ function weekToMonth(year,wk){const jan4=new Date(year,0,4);const start=startOfW
 function calMatrix(year,m){const first=new Date(year,m,1);const startPad=first.getDay();const dim=new Date(year,m+1,0).getDate();const cells=[];for(let i=0;i<startPad;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);while(cells.length%7!==0)cells.push(null);const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));return weeks;}
 let _id=200; const uid=()=>`x${++_id}`;
 
+// ── Supabase sync config ──
+const SB_URL="https://xnzrrcqsgvmvinnfmjhu.supabase.co";
+const SB_KEY="sb_publishable_kv2zn8BhA1Ltvmyz4Wpk8w_U60r_B1l";
+const SB_ROW="shared"; // single shared row id; change to make separate boards
+const sbHeaders={ "apikey":SB_KEY, "Authorization":`Bearer ${SB_KEY}`, "Content-Type":"application/json" };
+async function sbLoad(){
+  const r=await fetch(`${SB_URL}/rest/v1/planner_data?id=eq.${SB_ROW}&select=data`,{headers:sbHeaders});
+  if(!r.ok) throw new Error("load failed");
+  const rows=await r.json();
+  return rows[0]?.data||null;
+}
+async function sbSave(data){
+  await fetch(`${SB_URL}/rest/v1/planner_data`,{
+    method:"POST",
+    headers:{...sbHeaders,"Prefer":"resolution=merge-duplicates"},
+    body:JSON.stringify({id:SB_ROW,data,updated_at:new Date().toISOString()}),
+  });
+}
+
 export default function App(){
   const [theme,setTheme]=useState("light");
   const C=THEMES[theme];
@@ -41,11 +60,35 @@ export default function App(){
   const [newCat,setNewCat]=useState(false);
   const [projModal,setProjModal]=useState(null);
   const [projYear,setProjYear]=useState(2026);
+  const [sync,setSync]=useState("연결 중…");
 
-  useEffect(()=>{ try{ const raw=localStorage.getItem("planner7");
-    if(raw){ const s=JSON.parse(raw); setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setShelf(s.shelf||[]);} else seed();
-  }catch{seed();} setLoaded(true); },[]);
-  useEffect(()=>{ if(!loaded)return; try{ localStorage.setItem("planner7",JSON.stringify({theme,cats,tasks,projects,shelf})); }catch{} },[theme,cats,tasks,projects,shelf,loaded]);
+  const applyState=(s)=>{ setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setShelf(s.shelf||[]); };
+
+  useEffect(()=>{(async()=>{
+    // 1) show local cache instantly (offline-friendly)
+    let hadLocal=false;
+    try{ const raw=localStorage.getItem("planner7"); if(raw){ applyState(JSON.parse(raw)); hadLocal=true; } }catch{}
+    // 2) then pull from server (source of truth across devices)
+    try{
+      const server=await sbLoad();
+      if(server){ applyState(server); setSync("동기화됨"); }
+      else if(hadLocal){ setSync("동기화됨"); }   // will push local up on first change
+      else { seed(); setSync("동기화됨"); }
+    }catch(e){ setSync("오프라인(이 기기에만 저장)"); if(!hadLocal) seed(); }
+    setLoaded(true);
+  })();},[]);
+
+  // save: local cache immediately + debounce push to server
+  useEffect(()=>{ if(!loaded)return;
+    const payload={theme,cats,tasks,projects,shelf};
+    try{ localStorage.setItem("planner7",JSON.stringify(payload)); }catch{}
+    setSync("저장 중…");
+    const h=setTimeout(async()=>{
+      try{ await sbSave(payload); setSync("동기화됨"); }
+      catch{ setSync("오프라인(이 기기에만 저장)"); }
+    },600);
+    return ()=>clearTimeout(h);
+  },[theme,cats,tasks,projects,shelf,loaded]);
 
   const seed=()=>{
     setTasks({
@@ -86,8 +129,10 @@ export default function App(){
       `}</style>
 
       <header style={S.head}>
-        <div><div style={S.brandRow}><span style={{color:C.a2}}>◆</span><h1 style={S.brand}>계획 데스크</h1></div><p style={S.tag}>빠르게 보고, 급하게 추가하기</p></div>
+        <div><div style={S.brandRow}><span style={{color:C.a2}}>◆</span><h1 style={S.brand}>계획 데스크</h1></div>
+          <p style={S.tag}>빠르게 보고, 급하게 추가하기 · <span style={{color:sync==="동기화됨"?C.a2:C.textDim}}>{sync}</span></p></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button style={S.themeBtn} onClick={async()=>{ setSync("불러오는 중…"); try{ const s=await sbLoad(); if(s){applyState(s);} setSync("동기화됨"); }catch{ setSync("오프라인(이 기기에만 저장)"); } }} title="새로고침(다른 기기 변경 가져오기)">↻</button>
           <button style={S.themeBtn} onClick={()=>setTheme(t=>t==="light"?"dark":"light")} title="테마 전환">{theme==="light"?"🌙":"☀️"}</button>
           <div style={S.switch}>{["달력","일","월","년"].map(v=>(<button key={v} onClick={()=>setView(v)} style={{...S.swBtn,...(view===v?S.swOn:{})}}>{v}</button>))}</div>
         </div>
