@@ -121,8 +121,8 @@ export default function App(){
       {id:uid(),text:"집 매수 (인플레 헷지)",cat:"c1",year:2026,startWeek:36,endWeek:48,note:"동탄 인근 우선 검토"},
     ]);
     setYearProjects([
-      {id:uid(),text:"둘째 자녀 계획",cat:"c3",year:2026,startWeek:32,endWeek:52,note:"연말까지 이어지는 장기 계획"},
-      {id:uid(),text:"자산 증식 계획",cat:"c1",year:2027,startWeek:1,endWeek:52,note:"장기 자산 배분"},
+      {id:uid(),text:"둘째 자녀 계획",cat:"c3",year:2026,startMonth:7,endMonth:11,note:"연말까지 이어지는 장기 계획"},
+      {id:uid(),text:"자산 증식 계획",cat:"c1",year:2027,startMonth:0,endMonth:11,note:"장기 자산 배분"},
     ]);
   };
   useEffect(()=>{ const acc=[C.a1,C.a2,C.a3,C.a4,"#6FA8DC","#E06C9F","#7FB069"]; setCats(cs=>cs.map((c,i)=>({...c,color:acc[i%acc.length]}))); },[theme]); // eslint-disable-line
@@ -322,14 +322,13 @@ function MonthWeeks({year,projects,catOf,cats,onOpen,setProjects,S,C,uid}){
   );
 }
 function YearGantt({year,projects,catOf,onOpen,S,C,highlight}){ const yp=projects.filter(p=>p.year===year);
-  return (<div style={{...S.yg,...(highlight?{borderColor:C.a2,boxShadow:`inset 0 0 0 1px ${C.a2}44`}:{})}}><div style={S.ygHead}><span style={{...S.ygYear,...(highlight?{color:C.a2}:{})}}>{year}</span><div style={S.ygMonths}>{MONTHS_SHORT.map((m,i)=><div key={i} style={S.ygMonthCell}>{m}</div>)}</div></div>{yp.length===0&&<div style={S.ygEmpty}>—</div>}{yp.map(p=>{ const cat=catOf(p.cat); const sm=weekToMonth(year,p.startWeek); const em=weekToMonth(year,p.endWeek); const left=(sm/12)*100; const width=((em-sm+1)/12)*100; return (<div key={p.id} style={S.ygRow}><div style={S.ygLabel}><span style={{...S.chipNum,background:cat.color}}>{cat.n}</span><span style={S.ganttName}>{p.text}</span></div><div style={S.ygTrack}>{MONTHS_SHORT.map((_,i)=><div key={i} style={S.ygGrid}/>)}<button onClick={()=>onOpen(p)} title={p.text} style={{...S.ygBar,left:`${left}%`,width:`${Math.max(width,4)}%`,background:cat.color}}/></div></div>);})}</div>);
+  return (<div style={{...S.yg,...(highlight?{borderColor:C.a2,boxShadow:`inset 0 0 0 1px ${C.a2}44`}:{})}}><div style={S.ygHead}><span style={{...S.ygYear,...(highlight?{color:C.a2}:{})}}>{year}</span><div style={S.ygMonths}>{MONTHS_SHORT.map((m,i)=><div key={i} style={S.ygMonthCell}>{m}</div>)}</div></div>{yp.length===0&&<div style={S.ygEmpty}>—</div>}{yp.map(p=>{ const cat=catOf(p.cat); const sm=p.startMonth!=null?p.startMonth:weekToMonth(year,p.startWeek); const em=p.endMonth!=null?p.endMonth:weekToMonth(year,p.endWeek); const left=(sm/12)*100; const width=((em-sm+1)/12)*100; return (<div key={p.id} style={S.ygRow}><div style={S.ygLabel}><span style={{...S.chipNum,background:cat.color}}>{cat.n}</span><span style={S.ganttName}>{p.text}</span></div><div style={S.ygTrack}>{MONTHS_SHORT.map((_,i)=><div key={i} style={S.ygGrid}/>)}<button onClick={()=>onOpen(p)} title={p.text} style={{...S.ygBar,left:`${left}%`,width:`${Math.max(width,4)}%`,background:cat.color}}/></div></div>);})}</div>);
 }
 function YearStack({projects,catOf,cats,onOpen,setProjects,uid,S,C}){
   const list=Array.from({length:10},(_,i)=>THIS_YEAR-3+i);
   const [adding,setAdding]=useState(false);
   const [nt,setNt]=useState(""); const [nn,setNn]=useState(""); const [nc,setNc]=useState(cats[0].id);
-  const [nyr,setNyr]=useState(THIS_YEAR); const [nsw,setNsw]=useState(1); const [new_,setNew]=useState(1);
-  const wiy=weeksInYear(nyr);
+  const [nyr,setNyr]=useState(THIS_YEAR); const [nsm,setNsm]=useState(0); const [nem,setNem]=useState(0);
   return (
     <div style={S.yearStackWrap}>
       <div style={{...S.ganttInfo,padding:"0 4px"}}>
@@ -342,10 +341,10 @@ function YearStack({projects,catOf,cats,onOpen,setProjects,uid,S,C}){
           <input value={nn} onChange={e=>setNn(e.target.value)} placeholder="메모(선택)" style={{...S.shelfInput,minWidth:100}}/>
           <select value={nc} onChange={e=>setNc(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select>
           <select value={nyr} onChange={e=>{setNyr(+e.target.value);}} style={S.sel}>{list.map(y=><option key={y} value={y}>{y}년</option>)}</select>
-          <select value={nsw} onChange={e=>setNsw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+          <select value={nsm} onChange={e=>setNsm(+e.target.value)} style={S.sel}>{MONTHS.map((mm,i)=><option key={i} value={i}>{mm}</option>)}</select>
           <span style={{color:C.textDim}}>~</span>
-          <select value={new_} onChange={e=>setNew(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
-          <button style={S.saveBtn} onClick={()=>{ if(nt.trim()){ setProjects(p=>[...p,{id:uid(),text:nt.trim(),note:nn.trim(),cat:nc,year:nyr,startWeek:nsw,endWeek:Math.max(nsw,new_)}]); setNt("");setNn(""); setAdding(false);} }}>추가</button>
+          <select value={nem} onChange={e=>setNem(+e.target.value)} style={S.sel}>{MONTHS.map((mm,i)=><option key={i} value={i}>{mm}</option>)}</select>
+          <button style={S.saveBtn} onClick={()=>{ if(nt.trim()){ setProjects(p=>[...p,{id:uid(),text:nt.trim(),note:nn.trim(),cat:nc,year:nyr,startMonth:nsm,endMonth:Math.max(nsm,nem)}]); setNt("");setNn(""); setAdding(false);} }}>추가</button>
         </div>
       )}
       <div className="sc" style={S.yearStackScroll}>{list.map(y=>(<YearGantt key={y} year={y} projects={projects} catOf={catOf} onOpen={onOpen} S={S} C={C} highlight={y===THIS_YEAR}/>))}</div>
@@ -353,27 +352,36 @@ function YearStack({projects,catOf,cats,onOpen,setProjects,uid,S,C}){
   );
 }
 function ProjModal({C,S,proj,cat,cats,onSave,onDelete,onClose}){
+  const isYear = proj._src==="year";
   const wiy=weeksInYear(proj.year);
   const [text,setText]=useState(proj.text);
   const [note,setNote]=useState(proj.note||"");
   const [pc,setPc]=useState(proj.cat);
-  const [sw,setSw]=useState(proj.startWeek);
-  const [ew,setEw]=useState(proj.endWeek);
+  const [sw,setSw]=useState(proj.startWeek||1);
+  const [ew,setEw]=useState(proj.endWeek||1);
+  const [sm,setSm]=useState(proj.startMonth!=null?proj.startMonth:0);
+  const [em,setEm]=useState(proj.endMonth!=null?proj.endMonth:0);
   return (<div style={S.overlay} onClick={onClose}><div style={S.modal} onClick={e=>e.stopPropagation()}>
     <div style={{...S.modalTag,color:(cats.find(c=>c.id===pc)||cat).color}}>프로젝트 수정 · {proj.year}년</div>
     <input value={text} onChange={e=>setText(e.target.value)} placeholder="프로젝트 이름" style={{...S.shelfInput,width:"100%",fontSize:16,fontWeight:700,marginTop:8,marginBottom:10}}/>
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
       <select value={pc} onChange={e=>setPc(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select>
-      <select value={sw} onChange={e=>setSw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
-      <span style={{color:C.textDim}}>~</span>
-      <select value={ew} onChange={e=>setEw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+      {isYear?(<>
+        <select value={sm} onChange={e=>setSm(+e.target.value)} style={S.sel}>{MONTHS.map((mm,i)=><option key={i} value={i}>{mm}</option>)}</select>
+        <span style={{color:C.textDim}}>~</span>
+        <select value={em} onChange={e=>setEm(+e.target.value)} style={S.sel}>{MONTHS.map((mm,i)=><option key={i} value={i}>{mm}</option>)}</select>
+      </>):(<>
+        <select value={sw} onChange={e=>setSw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+        <span style={{color:C.textDim}}>~</span>
+        <select value={ew} onChange={e=>setEw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+      </>)}
     </div>
     <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="메모(선택)" style={{...S.modalArea,marginBottom:4}} rows={2}/>
     <div style={{...S.modalBtns,justifyContent:"space-between"}}>
       <button style={{...S.skipBtn,color:C.a1,borderColor:C.a1}} onClick={()=>onDelete(proj.id)}>삭제</button>
       <div style={{display:"flex",gap:10}}>
         <button style={S.skipBtn} onClick={onClose}>취소</button>
-        <button style={S.saveBtn} onClick={()=>{ if(text.trim()) onSave({...proj,text:text.trim(),note:note.trim(),cat:pc,startWeek:sw,endWeek:Math.max(sw,ew)}); }}>저장</button>
+        <button style={S.saveBtn} onClick={()=>{ if(!text.trim())return; const base={...proj,text:text.trim(),note:note.trim(),cat:pc}; onSave(isYear?{...base,startMonth:sm,endMonth:Math.max(sm,em)}:{...base,startWeek:sw,endWeek:Math.max(sw,ew)}); }}>저장</button>
       </div>
     </div>
   </div></div>); }
