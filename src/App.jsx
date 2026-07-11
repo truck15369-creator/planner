@@ -149,13 +149,16 @@ export default function App(){
         <MonthWeeks year={projYear} projects={projects} catOf={catOf} cats={cats} onOpen={setProjModal} setProjects={setProjects} S={S} C={C} uid={uid}/></>
       )}
       {view==="년"&&(
-        <><div style={S.nav}><span style={S.range}>최근 10년 · 연도별 간트</span><div style={S.legend}>{cats.map(c=>(<span key={c.id} style={S.legendItem}><span style={{...S.legendDot,background:c.color}}/><b style={{color:c.color}}>{c.n}.</b>{c.label}</span>))}</div></div>
-        <YearStack projects={projects} catOf={catOf} onOpen={setProjModal} S={S} C={C}/></>
+        <><div style={S.nav}><span style={S.range}>최근 10년 · 연도별 간트</span><div style={S.legend}>{cats.map(c=>(<span key={c.id} style={S.legendItem}><span style={{...S.legendDot,background:c.color}}/><b style={{color:c.color}}>{c.n}.</b>{c.label}</span>))}<button style={S.catEdit} onClick={()=>setNewCat(true)}>+ 카테고리</button></div></div>
+        <YearStack projects={projects} catOf={catOf} cats={cats} onOpen={setProjModal} setProjects={setProjects} uid={uid} S={S} C={C}/></>
       )}
 
       {reflect&&<Reflect C={C} S={S} text={reflect.text} onSave={n=>saveNote(reflect.dIso,reflect.id,n)} onSkip={()=>setReflect(null)}/>}
       {newCat&&<NewCat C={C} S={S} cats={cats} onSave={(label,color)=>{ setCats([...cats,{id:uid(),n:cats.length+1,label,color}]); setNewCat(false); }} onDelete={(id)=>setCats(cats.filter(c=>c.id!==id).map((c,i)=>({...c,n:i+1})))} onClose={()=>setNewCat(false)}/>}
-      {projModal&&<ProjModal C={C} S={S} proj={projModal} cat={catOf(projModal.cat)} onClose={()=>setProjModal(null)}/>}
+      {projModal&&<ProjModal C={C} S={S} proj={projModal} cat={catOf(projModal.cat)} cats={cats}
+        onSave={(up)=>{ setProjects(ps=>ps.map(p=>p.id===up.id?up:p)); setProjModal(null); }}
+        onDelete={(id)=>{ setProjects(ps=>ps.filter(p=>p.id!==id)); setProjModal(null); }}
+        onClose={()=>setProjModal(null)}/>}
     </div>
   );
 }
@@ -300,8 +303,59 @@ function MonthWeeks({year,projects,catOf,cats,onOpen,setProjects,S,C,uid}){
 function YearGantt({year,projects,catOf,onOpen,S,C,highlight}){ const yp=projects.filter(p=>p.year===year);
   return (<div style={{...S.yg,...(highlight?{borderColor:C.a2,boxShadow:`inset 0 0 0 1px ${C.a2}44`}:{})}}><div style={S.ygHead}><span style={{...S.ygYear,...(highlight?{color:C.a2}:{})}}>{year}</span><div style={S.ygMonths}>{MONTHS_SHORT.map((m,i)=><div key={i} style={S.ygMonthCell}>{m}</div>)}</div></div>{yp.length===0&&<div style={S.ygEmpty}>—</div>}{yp.map(p=>{ const cat=catOf(p.cat); const sm=weekToMonth(year,p.startWeek); const em=weekToMonth(year,p.endWeek); const left=(sm/12)*100; const width=((em-sm+1)/12)*100; return (<div key={p.id} style={S.ygRow}><div style={S.ygLabel}><span style={{...S.chipNum,background:cat.color}}>{cat.n}</span><span style={S.ganttName}>{p.text}</span></div><div style={S.ygTrack}>{MONTHS_SHORT.map((_,i)=><div key={i} style={S.ygGrid}/>)}<button onClick={()=>onOpen(p)} title={p.text} style={{...S.ygBar,left:`${left}%`,width:`${Math.max(width,4)}%`,background:cat.color}}/></div></div>);})}</div>);
 }
-function YearStack({projects,catOf,onOpen,S,C}){ const list=Array.from({length:10},(_,i)=>THIS_YEAR-3+i); return (<div style={S.yearStackWrap}><div className="sc" style={S.yearStackScroll}>{list.map(y=>(<YearGantt key={y} year={y} projects={projects} catOf={catOf} onOpen={onOpen} S={S} C={C} highlight={y===THIS_YEAR}/>))}</div></div>); }
-function ProjModal({C,S,proj,cat,onClose}){ return (<div style={S.overlay} onClick={onClose}><div style={S.modal} onClick={e=>e.stopPropagation()}><div style={{...S.modalTag,color:cat.color}}>{cat.n}. {cat.label} · {proj.year}년</div><h3 style={S.modalTitle}>{proj.text}</h3><p style={S.modalHint}>wk{proj.startWeek} ~ wk{proj.endWeek}</p>{proj.note?<p style={{...S.rowText,marginTop:6}}>{proj.note}</p>:<p style={{...S.rowNote,marginTop:6}}>메모가 없어요.</p>}<div style={S.modalBtns}><button style={S.saveBtn} onClick={onClose}>닫기</button></div></div></div>); }
+function YearStack({projects,catOf,cats,onOpen,setProjects,uid,S,C}){
+  const list=Array.from({length:10},(_,i)=>THIS_YEAR-3+i);
+  const [adding,setAdding]=useState(false);
+  const [nt,setNt]=useState(""); const [nn,setNn]=useState(""); const [nc,setNc]=useState(cats[0].id);
+  const [nyr,setNyr]=useState(THIS_YEAR); const [nsw,setNsw]=useState(1); const [new_,setNew]=useState(1);
+  const wiy=weeksInYear(nyr);
+  return (
+    <div style={S.yearStackWrap}>
+      <div style={{...S.ganttInfo,padding:"0 4px"}}>
+        <span style={S.shelfHint}>막대를 누르면 수정·삭제할 수 있어요. 연도를 골라 새 프로젝트를 추가하세요.</span>
+        <button style={S.addProjBtn} onClick={()=>setAdding(!adding)}>+ 프로젝트</button>
+      </div>
+      {adding&&(
+        <div style={S.projForm}>
+          <input value={nt} onChange={e=>setNt(e.target.value)} placeholder="이름 (예: 이직 준비)" style={{...S.shelfInput,minWidth:140}}/>
+          <input value={nn} onChange={e=>setNn(e.target.value)} placeholder="메모(선택)" style={{...S.shelfInput,minWidth:100}}/>
+          <select value={nc} onChange={e=>setNc(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select>
+          <select value={nyr} onChange={e=>{setNyr(+e.target.value);}} style={S.sel}>{list.map(y=><option key={y} value={y}>{y}년</option>)}</select>
+          <select value={nsw} onChange={e=>setNsw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+          <span style={{color:C.textDim}}>~</span>
+          <select value={new_} onChange={e=>setNew(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+          <button style={S.saveBtn} onClick={()=>{ if(nt.trim()){ setProjects(p=>[...p,{id:uid(),text:nt.trim(),note:nn.trim(),cat:nc,year:nyr,startWeek:nsw,endWeek:Math.max(nsw,new_)}]); setNt("");setNn(""); setAdding(false);} }}>추가</button>
+        </div>
+      )}
+      <div className="sc" style={S.yearStackScroll}>{list.map(y=>(<YearGantt key={y} year={y} projects={projects} catOf={catOf} onOpen={onOpen} S={S} C={C} highlight={y===THIS_YEAR}/>))}</div>
+    </div>
+  );
+}
+function ProjModal({C,S,proj,cat,cats,onSave,onDelete,onClose}){
+  const wiy=weeksInYear(proj.year);
+  const [text,setText]=useState(proj.text);
+  const [note,setNote]=useState(proj.note||"");
+  const [pc,setPc]=useState(proj.cat);
+  const [sw,setSw]=useState(proj.startWeek);
+  const [ew,setEw]=useState(proj.endWeek);
+  return (<div style={S.overlay} onClick={onClose}><div style={S.modal} onClick={e=>e.stopPropagation()}>
+    <div style={{...S.modalTag,color:(cats.find(c=>c.id===pc)||cat).color}}>프로젝트 수정 · {proj.year}년</div>
+    <input value={text} onChange={e=>setText(e.target.value)} placeholder="프로젝트 이름" style={{...S.shelfInput,width:"100%",fontSize:16,fontWeight:700,marginTop:8,marginBottom:10}}/>
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
+      <select value={pc} onChange={e=>setPc(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select>
+      <select value={sw} onChange={e=>setSw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+      <span style={{color:C.textDim}}>~</span>
+      <select value={ew} onChange={e=>setEw(+e.target.value)} style={S.sel}>{Array.from({length:wiy},(_,i)=>i+1).map(w=><option key={w} value={w}>wk{w}</option>)}</select>
+    </div>
+    <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="메모(선택)" style={{...S.modalArea,marginBottom:4}} rows={2}/>
+    <div style={{...S.modalBtns,justifyContent:"space-between"}}>
+      <button style={{...S.skipBtn,color:C.a1,borderColor:C.a1}} onClick={()=>onDelete(proj.id)}>삭제</button>
+      <div style={{display:"flex",gap:10}}>
+        <button style={S.skipBtn} onClick={onClose}>취소</button>
+        <button style={S.saveBtn} onClick={()=>{ if(text.trim()) onSave({...proj,text:text.trim(),note:note.trim(),cat:pc,startWeek:sw,endWeek:Math.max(sw,ew)}); }}>저장</button>
+      </div>
+    </div>
+  </div></div>); }
 function Reflect({C,S,text,onSave,onSkip}){ const [n,setN]=useState(""); const ref=useRef(null); useEffect(()=>{ref.current&&ref.current.focus();},[]); return (<div style={S.overlay} onClick={onSkip}><div style={S.modal} onClick={e=>e.stopPropagation()}><div style={S.modalTag}>완료 · 복기</div><h3 style={S.modalTitle}>{text}</h3><p style={S.modalHint}>그냥 끝내지 말고 — 무엇을 배웠는지, 다음엔 뭘 바꿀지 한 줄.</p><textarea ref={ref} value={n} onChange={e=>setN(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey))onSave(n);}} placeholder="예: 앞마당 먼저 먹으니 자원 격차가 큼. 다음엔 정찰을 앞당기기." style={S.modalArea} rows={3}/><div style={S.modalBtns}><button style={S.skipBtn} onClick={onSkip}>그냥 완료</button><button style={S.saveBtn} onClick={()=>onSave(n)}>남기기</button></div></div></div>); }
 function NewCat({C,S,cats,onSave,onDelete,onClose}){ const PAL=palette(C); const [label,setLabel]=useState(""); const [color,setColor]=useState(PAL[3]); return (<div style={S.overlay} onClick={onClose}><div style={S.modal} onClick={e=>e.stopPropagation()}><div style={S.modalTag}>카테고리 관리</div><div style={{margin:"12px 0"}}>{cats.map(c=>(<div key={c.id} style={S.catManageRow}><span style={{...S.chipNum,background:c.color}}>{c.n}</span><span style={{flex:1}}>{c.label}</span><button style={S.rowX} onClick={()=>onDelete(c.id)}>×</button></div>))}</div><input value={label} onChange={e=>setLabel(e.target.value)} placeholder="새 카테고리 이름" style={{...S.shelfInput,width:"100%",marginBottom:10}}/><div style={{display:"flex",gap:8,marginBottom:14}}>{PAL.map(p=>(<button key={p} onClick={()=>setColor(p)} style={{width:26,height:26,borderRadius:7,background:p,border:color===p?`2px solid ${C.text}`:"2px solid transparent",cursor:"pointer"}}/>))}</div><div style={S.modalBtns}><button style={S.skipBtn} onClick={onClose}>닫기</button><button style={S.saveBtn} onClick={()=>label.trim()&&onSave(label.trim(),color)}>추가</button></div></div></div>); }
 
