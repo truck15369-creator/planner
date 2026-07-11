@@ -20,19 +20,20 @@ const THIS_YEAR=2026;
 function isoWeek(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-dn+3);const ft=new Date(Date.UTC(d.getUTCFullYear(),0,4));const fdn=(ft.getUTCDay()+6)%7;ft.setUTCDate(ft.getUTCDate()-fdn+3);return 1+Math.round((d-ft)/(7*24*3600*1000));}
 function isoWeekYear(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-dn+3);return d.getUTCFullYear();}
 function monthWeekRows(year,m){
-  // Real ISO weeks (Mon-Sun) that overlap this month.
+  // Each ISO week belongs to exactly one month: the month containing its Thursday.
+  // So a week spanning two months shows only under the month its Thursday falls in (no duplicates).
   const dim=new Date(year,m+1,0).getDate();
   const rows=[];
-  let cur=startOfWeek(new Date(year,m,1)); // Monday of the week containing the 1st
+  let cur=startOfWeek(new Date(year,m,1)); // Monday of week containing the 1st
   const monthEnd=new Date(year,m,dim);
   while(cur<=monthEnd){
-    const weekEnd=addDays(cur,6); // Sunday
-    // clamp visible span to this month
-    const spanStart = cur.getMonth()===m ? cur.getDate() : 1;
-    const spanEnd   = weekEnd.getMonth()===m ? weekEnd.getDate() : dim;
-    const thu=addDays(cur,3); // Thursday determines ISO week/year
-    rows.push({ s:spanStart, e:spanEnd, wk:isoWeek(thu), wkYear:isoWeekYear(thu),
-      sMonth:cur.getMonth(), eMonth:weekEnd.getMonth() });
+    const thu=addDays(cur,3);          // Thursday decides ownership
+    const weekEnd=addDays(cur,6);      // Sunday
+    if(thu.getMonth()===m && thu.getFullYear()===year){
+      const spanStart = cur.getMonth()===m ? cur.getDate() : 1;
+      const spanEnd   = weekEnd.getMonth()===m ? weekEnd.getDate() : dim;
+      rows.push({ s:spanStart, e:spanEnd, wk:isoWeek(thu), wkYear:isoWeekYear(thu) });
+    }
     cur=addDays(cur,7);
   }
   return rows;
