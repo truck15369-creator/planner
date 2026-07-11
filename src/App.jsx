@@ -19,7 +19,24 @@ const TODAY=new Date("2026-07-11T00:00:00");
 const THIS_YEAR=2026;
 function isoWeek(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-dn+3);const ft=new Date(Date.UTC(d.getUTCFullYear(),0,4));const fdn=(ft.getUTCDay()+6)%7;ft.setUTCDate(ft.getUTCDate()-fdn+3);return 1+Math.round((d-ft)/(7*24*3600*1000));}
 function isoWeekYear(date){const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));const dn=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-dn+3);return d.getUTCFullYear();}
-function monthWeekRows(year,m){const dim=new Date(year,m+1,0).getDate();const rows=[];let s=1;while(s<=dim){const e=Math.min(s+6,dim);const mid=new Date(year,m,s);rows.push({s,e,wk:isoWeek(mid),wkYear:isoWeekYear(mid)});s=e+1;}return rows;}
+function monthWeekRows(year,m){
+  // Real ISO weeks (Mon-Sun) that overlap this month.
+  const dim=new Date(year,m+1,0).getDate();
+  const rows=[];
+  let cur=startOfWeek(new Date(year,m,1)); // Monday of the week containing the 1st
+  const monthEnd=new Date(year,m,dim);
+  while(cur<=monthEnd){
+    const weekEnd=addDays(cur,6); // Sunday
+    // clamp visible span to this month
+    const spanStart = cur.getMonth()===m ? cur.getDate() : 1;
+    const spanEnd   = weekEnd.getMonth()===m ? weekEnd.getDate() : dim;
+    const thu=addDays(cur,3); // Thursday determines ISO week/year
+    rows.push({ s:spanStart, e:spanEnd, wk:isoWeek(thu), wkYear:isoWeekYear(thu),
+      sMonth:cur.getMonth(), eMonth:weekEnd.getMonth() });
+    cur=addDays(cur,7);
+  }
+  return rows;
+}
 function weeksInYear(y){return isoWeek(new Date(y,11,28));}
 function weekToMonth(year,wk){const jan4=new Date(year,0,4);const start=startOfWeek(jan4);return addDays(start,(wk-1)*7+3).getMonth();}
 function calMatrix(year,m){const first=new Date(year,m,1);const startPad=first.getDay();const dim=new Date(year,m+1,0).getDate();const cells=[];for(let i=0;i<startPad;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);while(cells.length%7!==0)cells.push(null);const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));return weeks;}
@@ -50,6 +67,7 @@ export default function App(){
   const [cats,setCats]=useState(mkCats(THEMES.light));
   const [tasks,setTasks]=useState({});
   const [projects,setProjects]=useState([]);
+  const [yearProjects,setYearProjects]=useState([]);
   const [shelf,setShelf]=useState([]);
   const [view,setView]=useState("달력");
   const [calMonth,setCalMonth]=useState(new Date("2026-07-01T00:00:00"));
@@ -62,7 +80,7 @@ export default function App(){
   const [projYear,setProjYear]=useState(2026);
   const [sync,setSync]=useState("연결 중…");
 
-  const applyState=(s)=>{ setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setShelf(s.shelf||[]); };
+  const applyState=(s)=>{ setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setYearProjects(s.yearProjects||[]); setShelf(s.shelf||[]); };
 
   useEffect(()=>{(async()=>{
     // 1) show local cache instantly (offline-friendly)
@@ -80,7 +98,7 @@ export default function App(){
 
   // save: local cache immediately + debounce push to server
   useEffect(()=>{ if(!loaded)return;
-    const payload={theme,cats,tasks,projects,shelf};
+    const payload={theme,cats,tasks,projects,yearProjects,shelf};
     try{ localStorage.setItem("planner7",JSON.stringify(payload)); }catch{}
     setSync("저장 중…");
     const h=setTimeout(async()=>{
@@ -88,7 +106,7 @@ export default function App(){
       catch{ setSync("오프라인(이 기기에만 저장)"); }
     },600);
     return ()=>clearTimeout(h);
-  },[theme,cats,tasks,projects,shelf,loaded]);
+  },[theme,cats,tasks,projects,yearProjects,shelf,loaded]);
 
   const seed=()=>{
     setTasks({
@@ -99,8 +117,10 @@ export default function App(){
     setShelf([{id:uid(),text:"반도체 공정 기초 (EUV/증착) 정리",cat:"c3"},{id:uid(),text:"동탄 근처 풋살팀원 구하기",cat:"c3"},{id:uid(),text:"SK 재테크 공부 시작하기",cat:"c1"}]);
     setProjects([
       {id:uid(),text:"해외 출장/교육",cat:"c2",year:2026,startWeek:25,endWeek:25,note:"6월 셋째 주. 여권/비자 확인"},
-      {id:uid(),text:"둘째 자녀 계획",cat:"c3",year:2026,startWeek:32,endWeek:52,note:"연말까지 이어지는 장기 계획"},
       {id:uid(),text:"집 매수 (인플레 헷지)",cat:"c1",year:2026,startWeek:36,endWeek:48,note:"동탄 인근 우선 검토"},
+    ]);
+    setYearProjects([
+      {id:uid(),text:"둘째 자녀 계획",cat:"c3",year:2026,startWeek:32,endWeek:52,note:"연말까지 이어지는 장기 계획"},
       {id:uid(),text:"자산 증식 계획",cat:"c1",year:2027,startWeek:1,endWeek:52,note:"장기 자산 배분"},
     ]);
   };
@@ -146,18 +166,18 @@ export default function App(){
       )}
       {view==="월"&&(
         <><div style={S.nav}><button style={S.navBtn} onClick={()=>setProjYear(y=>y-1)}>‹</button><span style={S.range}>{projYear}년 · 주차별 프로젝트</span><button style={S.navBtn} onClick={()=>setProjYear(y=>y+1)}>›</button><div style={S.legend}>{cats.map(c=>(<span key={c.id} style={S.legendItem}><span style={{...S.legendDot,background:c.color}}/><b style={{color:c.color}}>{c.n}.</b>{c.label}</span>))}<button style={S.catEdit} onClick={()=>setNewCat(true)}>+ 카테고리</button></div></div>
-        <MonthWeeks year={projYear} projects={projects} catOf={catOf} cats={cats} onOpen={setProjModal} setProjects={setProjects} S={S} C={C} uid={uid}/></>
+        <MonthWeeks year={projYear} projects={projects} catOf={catOf} cats={cats} onOpen={(p)=>setProjModal({...p,_src:"month"})} setProjects={setProjects} S={S} C={C} uid={uid}/></>
       )}
       {view==="년"&&(
         <><div style={S.nav}><span style={S.range}>최근 10년 · 연도별 간트</span><div style={S.legend}>{cats.map(c=>(<span key={c.id} style={S.legendItem}><span style={{...S.legendDot,background:c.color}}/><b style={{color:c.color}}>{c.n}.</b>{c.label}</span>))}<button style={S.catEdit} onClick={()=>setNewCat(true)}>+ 카테고리</button></div></div>
-        <YearStack projects={projects} catOf={catOf} cats={cats} onOpen={setProjModal} setProjects={setProjects} uid={uid} S={S} C={C}/></>
+        <YearStack projects={yearProjects} catOf={catOf} cats={cats} onOpen={(p)=>setProjModal({...p,_src:"year"})} setProjects={setYearProjects} uid={uid} S={S} C={C}/></>
       )}
 
       {reflect&&<Reflect C={C} S={S} text={reflect.text} onSave={n=>saveNote(reflect.dIso,reflect.id,n)} onSkip={()=>setReflect(null)}/>}
       {newCat&&<NewCat C={C} S={S} cats={cats} onSave={(label,color)=>{ setCats([...cats,{id:uid(),n:cats.length+1,label,color}]); setNewCat(false); }} onDelete={(id)=>setCats(cats.filter(c=>c.id!==id).map((c,i)=>({...c,n:i+1})))} onClose={()=>setNewCat(false)}/>}
       {projModal&&<ProjModal C={C} S={S} proj={projModal} cat={catOf(projModal.cat)} cats={cats}
-        onSave={(up)=>{ setProjects(ps=>ps.map(p=>p.id===up.id?up:p)); setProjModal(null); }}
-        onDelete={(id)=>{ setProjects(ps=>ps.filter(p=>p.id!==id)); setProjModal(null); }}
+        onSave={(up)=>{ const setter=projModal._src==="year"?setYearProjects:setProjects; setter(ps=>ps.map(p=>p.id===up.id?{...up,_src:undefined}:p)); setProjModal(null); }}
+        onDelete={(id)=>{ const setter=projModal._src==="year"?setYearProjects:setProjects; setter(ps=>ps.filter(p=>p.id!==id)); setProjModal(null); }}
         onClose={()=>setProjModal(null)}/>}
     </div>
   );
