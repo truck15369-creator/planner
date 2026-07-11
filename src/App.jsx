@@ -79,6 +79,10 @@ export default function App(){
         ::selection{background:${C.a2};color:${C.bg};}
         .sc::-webkit-scrollbar{width:7px;height:7px;} .sc::-webkit-scrollbar-thumb{background:${C.line};border-radius:4px;}
         @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+        @media(max-width:760px){
+          .calsplit{flex-direction:column-reverse !important;}
+          .agenda{width:100% !important;border-right:none !important;border-top:1px solid ${C.line} !important;max-height:42% !important;}
+        }
       `}</style>
 
       <header style={S.head}>
@@ -113,31 +117,76 @@ export default function App(){
 
 function CalendarView({monthAnchor,setMonthAnchor,tasks,cats,catOf,selDay,setSelDay,toggle,delTask,setTasks,uid,S,C}){
   const y=monthAnchor.getFullYear(), m=monthAnchor.getMonth(); const weeks=calMatrix(y,m);
-  const selItems=(tasks[selDay]||[]).slice().sort((a,b)=>((a.hour==null?99:a.hour)-(b.hour==null?99:b.hour)));
   const [adding,setAdding]=useState(false); const [t,setT]=useState(""); const [cat,setCat]=useState("c2"); const [hour,setHour]=useState(9); const inputRef=useRef(null);
   const quickAdd=()=>{ const v=t.trim(); if(!v)return; setTasks(p=>({...p,[selDay]:[...(p[selDay]||[]),{id:uid(),text:v,cat,hour,done:false,note:""}]})); setT(""); };
   const shiftMonth=(dir)=>{ const x=new Date(monthAnchor); x.setMonth(x.getMonth()+dir); setMonthAnchor(x); };
-  const selDate=new Date(selDay+"T00:00:00");
   const dayDots=(dn)=>{ if(!dn)return []; const arr=tasks[iso(new Date(y,m,dn))]||[]; const set=[]; arr.forEach(it=>{const c=catOf(it.cat); if(!set.includes(c.color))set.push(c.color);}); return set.slice(0,3); };
   const todayIso=iso(TODAY);
+
+  // Agenda: all days that have events, sorted by date; from today onward (like Apple's left list)
+  const agenda = Object.keys(tasks)
+    .filter(k=>(tasks[k]||[]).length>0 && k>=todayIso)
+    .sort()
+    .map(k=>({ dateIso:k, date:new Date(k+"T00:00:00"), items:tasks[k].slice().sort((a,b)=>((a.hour==null?99:a.hour)-(b.hour==null?99:b.hour))) }));
+  const fmtDate=(d)=>`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`;
+
   return (
-    <div style={S.calWrap}>
-      <div style={S.calTitleRow}><button style={S.navBtn} onClick={()=>shiftMonth(-1)}>‹</button><span style={S.calTitle}>{y}년 {MONTHS[m]}</span><button style={S.navBtn} onClick={()=>shiftMonth(1)}>›</button><button style={S.todayBtn} onClick={()=>{setMonthAnchor(new Date(TODAY.getFullYear(),TODAY.getMonth(),1));setSelDay(todayIso);}}>오늘</button></div>
-      <div style={S.calGrid}>
-        {WD.map((w,i)=>(<div key={w} style={{...S.calWD,color:i===0?C.a1:i===6?C.a4:C.textDim}}>{w}</div>))}
-        {weeks.map((week,wi)=>week.map((dn,di)=>{ const k=dn?iso(new Date(y,m,dn)):null; const isSel=k===selDay; const isToday=k===todayIso; const dots=dayDots(dn);
-          return (<button key={wi+"-"+di} disabled={!dn} onClick={()=>k&&setSelDay(k)} style={{...S.calCell,...(isSel?S.calCellSel:{}),...(dn?{}:{visibility:"hidden"})}}>
-            <span style={{...S.calNum,...(isToday?S.calToday:{}),...(isSel&&!isToday?{fontWeight:800}:{}),color:di===0?C.a1:di===6?C.a4:(isToday?C.bg:C.text)}}>{dn}</span>
-            <span style={S.calDots}>{dots.map((c,ci)=><span key={ci} style={{...S.calDot,background:c}}/>)}</span></button>);
-        }))}
-      </div>
-      <div style={S.selPanel}>
-        <div style={S.selHead}><span style={S.selDate}>{selDate.getMonth()+1}월 {selDate.getDate()}일 <span style={{color:C.textDim,fontWeight:500}}>{WD[selDate.getDay()]}요일</span></span><button style={S.addFab} onClick={()=>{setAdding(a=>!a);setTimeout(()=>inputRef.current&&inputRef.current.focus(),50);}}>+ 추가</button></div>
-        {adding&&(<div style={S.quickRow}><select value={cat} onChange={e=>setCat(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select><select value={hour} onChange={e=>setHour(+e.target.value)} style={S.selTime}>{HOURS.map(h=><option key={h} value={h}>{timeLabel(h)}</option>)}</select><input ref={inputRef} value={t} onChange={e=>setT(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")quickAdd();}} placeholder="내용 입력 후 Enter" style={S.addInput}/><button style={S.saveBtn} onClick={quickAdd}>추가</button></div>)}
-        <div className="sc" style={S.selList}>
-          {selItems.length===0&&<div style={S.dayEmpty}>이 날 일정이 없어요. + 추가로 빠르게 넣으세요.</div>}
-          {selItems.map(it=>{ const c=catOf(it.cat); return (<div key={it.id} style={{...S.row,opacity:it.done?0.5:1}}><button style={S.check} onClick={()=>toggle(selDay,it.id)}><span style={{...S.cbox,...(it.done?{background:c.color,borderColor:c.color}:{})}}>{it.done?"✓":""}</span></button><span style={{...S.catNum,color:c.color}}>{c.n}</span>{it.hour!=null&&<span style={S.timePill}>{String(it.hour).padStart(2,"0")}:00</span>}<div style={S.rowBody}><span style={{...S.rowText,textDecoration:it.done?"line-through":"none"}}>{it.text}</span>{it.note&&<span style={S.rowNote}>💭 {it.note}</span>}</div><button style={S.rowX} onClick={()=>delTask(selDay,it.id)}>×</button></div>);})}
+    <div className="calsplit" style={S.calSplit}>
+      {/* LEFT: agenda list (Apple-style) */}
+      <aside className="agenda" style={S.agenda}>
+        <div style={S.agendaHead}>다가오는 일정</div>
+        <div className="sc" style={S.agendaScroll}>
+          {agenda.length===0&&<div style={S.dayEmpty}>예정된 일정이 없어요.</div>}
+          {agenda.map(group=>{
+            const isSel=group.dateIso===selDay; const isToday=group.dateIso===todayIso;
+            return (
+              <div key={group.dateIso} style={S.agendaGroup}>
+                <button onClick={()=>{setSelDay(group.dateIso); setMonthAnchor(new Date(group.date.getFullYear(),group.date.getMonth(),1));}}
+                  style={{...S.agendaDate, ...(isSel?{color:C.a2}:{}), ...(isToday?{color:C.a1}:{})}}>
+                  {fmtDate(group.date)}{isToday?" · 오늘":""}
+                </button>
+                {group.items.map(it=>{ const c=catOf(it.cat); return (
+                  <div key={it.id} style={{...S.agendaItem,opacity:it.done?0.5:1}}>
+                    <span style={{...S.agendaBar,background:c.color}}/>
+                    <div style={S.rowBody}>
+                      <span style={{...S.rowText,fontSize:14,textDecoration:it.done?"line-through":"none"}}>{it.text}</span>
+                    </div>
+                    {it.hour!=null&&<span style={S.agendaTime}>{it.hour<12?"오전":"오후"} {((it.hour%12)||12)}:00</span>}
+                  </div>
+                );})}
+              </div>
+            );
+          })}
         </div>
+      </aside>
+
+      {/* RIGHT: calendar grid + selected day quick panel */}
+      <div style={S.calWrap}>
+        <div style={S.calTitleRow}><button style={S.navBtn} onClick={()=>shiftMonth(-1)}>‹</button><span style={S.calTitle}>{y}년 {MONTHS[m]}</span><button style={S.navBtn} onClick={()=>shiftMonth(1)}>›</button><button style={S.todayBtn} onClick={()=>{setMonthAnchor(new Date(TODAY.getFullYear(),TODAY.getMonth(),1));setSelDay(todayIso);}}>오늘</button></div>
+        <div style={S.calGrid}>
+          {WD.map((w,i)=>(<div key={w} style={{...S.calWD,color:i===0?C.a1:i===6?C.a4:C.textDim}}>{w}</div>))}
+          {weeks.map((week,wi)=>week.map((dn,di)=>{ const k=dn?iso(new Date(y,m,dn)):null; const isSel=k===selDay; const isToday=k===todayIso; const dots=dayDots(dn);
+            return (<button key={wi+"-"+di} disabled={!dn} onClick={()=>k&&setSelDay(k)} style={{...S.calCell,...(isSel?S.calCellSel:{}),...(dn?{}:{visibility:"hidden"})}}>
+              <span style={{...S.calNum,...(isToday?S.calToday:{}),...(isSel&&!isToday?{fontWeight:800}:{}),color:di===0?C.a1:di===6?C.a4:(isToday?C.bg:C.text)}}>{dn}</span>
+              <span style={S.calDots}>{dots.map((c,ci)=><span key={ci} style={{...S.calDot,background:c}}/>)}</span></button>);
+          }))}
+        </div>
+        <SelectedDay selDay={selDay} tasks={tasks} cats={cats} catOf={catOf} toggle={toggle} delTask={delTask} adding={adding} setAdding={setAdding} t={t} setT={setT} cat={cat} setCat={setCat} hour={hour} setHour={setHour} inputRef={inputRef} quickAdd={quickAdd} S={S} C={C}/>
+      </div>
+    </div>
+  );
+}
+
+function SelectedDay({selDay,tasks,cats,catOf,toggle,delTask,adding,setAdding,t,setT,cat,setCat,hour,setHour,inputRef,quickAdd,S,C}){
+  const selDate=new Date(selDay+"T00:00:00");
+  const selItems=(tasks[selDay]||[]).slice().sort((a,b)=>((a.hour==null?99:a.hour)-(b.hour==null?99:b.hour)));
+  return (
+    <div style={S.selPanel}>
+      <div style={S.selHead}><span style={S.selDate}>{selDate.getMonth()+1}월 {selDate.getDate()}일 <span style={{color:C.textDim,fontWeight:500}}>{WD[selDate.getDay()]}요일</span></span><button style={S.addFab} onClick={()=>{setAdding(a=>!a);setTimeout(()=>inputRef.current&&inputRef.current.focus(),50);}}>+ 추가</button></div>
+      {adding&&(<div style={S.quickRow}><select value={cat} onChange={e=>setCat(e.target.value)} style={S.sel}>{cats.map(c=><option key={c.id} value={c.id}>{c.n}.{c.label}</option>)}</select><select value={hour} onChange={e=>setHour(+e.target.value)} style={S.selTime}>{HOURS.map(h=><option key={h} value={h}>{timeLabel(h)}</option>)}</select><input ref={inputRef} value={t} onChange={e=>setT(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")quickAdd();}} placeholder="내용 입력 후 Enter" style={S.addInput}/><button style={S.saveBtn} onClick={quickAdd}>추가</button></div>)}
+      <div className="sc" style={S.selList}>
+        {selItems.length===0&&<div style={S.dayEmpty}>이 날 일정이 없어요. + 추가로 빠르게 넣으세요.</div>}
+        {selItems.map(it=>{ const c=catOf(it.cat); return (<div key={it.id} style={{...S.row,opacity:it.done?0.5:1}}><button style={S.check} onClick={()=>toggle(selDay,it.id)}><span style={{...S.cbox,...(it.done?{background:c.color,borderColor:c.color}:{})}}>{it.done?"✓":""}</span></button><span style={{...S.catNum,color:c.color}}>{c.n}</span>{it.hour!=null&&<span style={S.timePill}>{String(it.hour).padStart(2,"0")}:00</span>}<div style={S.rowBody}><span style={{...S.rowText,textDecoration:it.done?"line-through":"none"}}>{it.text}</span>{it.note&&<span style={S.rowNote}>💭 {it.note}</span>}</div><button style={S.rowX} onClick={()=>delTask(selDay,it.id)}>×</button></div>);})}
       </div>
     </div>
   );
@@ -223,6 +272,15 @@ const st=(C)=>({
   range:{fontSize:15,fontWeight:600}, legend:{display:"flex",gap:12,marginLeft:"auto",alignItems:"center",flexWrap:"wrap"},
   legendItem:{display:"flex",alignItems:"center",gap:5,fontSize:12.5,color:C.textDim}, legendDot:{width:8,height:8,borderRadius:"50%"},
   catEdit:{border:`1px solid ${C.line}`,background:"transparent",color:C.textDim,borderRadius:7,padding:"4px 9px",fontSize:12,cursor:"pointer"},
+  calSplit:{flex:1,display:"flex",minHeight:0,gap:0},
+  agenda:{width:290,flexShrink:0,borderRight:`1px solid ${C.line}`,display:"flex",flexDirection:"column",minHeight:0,background:C.panel},
+  agendaHead:{fontSize:13,fontWeight:700,color:C.textDim,padding:"14px 16px 8px",letterSpacing:"0.02em"},
+  agendaScroll:{flex:1,overflowY:"auto",padding:"0 8px 16px"},
+  agendaGroup:{marginBottom:14},
+  agendaDate:{display:"block",width:"100%",textAlign:"left",border:"none",background:"transparent",fontSize:13,fontWeight:700,color:C.text,padding:"6px 8px",cursor:"pointer",borderBottom:`1px solid ${C.line}`,marginBottom:4},
+  agendaItem:{display:"flex",alignItems:"center",gap:8,padding:"5px 8px"},
+  agendaBar:{width:3,alignSelf:"stretch",borderRadius:2,flexShrink:0,minHeight:20},
+  agendaTime:{fontSize:12,color:C.textDim,flexShrink:0,fontVariantNumeric:"tabular-nums"},
   calWrap:{flex:1,display:"flex",flexDirection:"column",padding:"12px 16px 16px",minHeight:0},
   calTitleRow:{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"},
   calTitle:{fontSize:20,fontWeight:800,letterSpacing:"-0.02em"},
