@@ -114,8 +114,8 @@ export default function App(){
   const [sharedTasks,setSharedTasks]=useState({}); // 공용 달력
   const firedRef=useRef({});
 
-  const applyPersonal=(s)=>{ setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setYearProjects(s.yearProjects||[]); setShelf(s.shelf||[]); setBuckets(s.buckets||[]); setPurchases(s.purchases||[]); };
-  const applyShared=(s)=>{ setSharedTasks(s.sharedTasks||{}); setRoutines(s.routines||[]); };
+  const applyPersonal=(s)=>{ setTheme(s.theme||"light"); setCats(s.cats||mkCats(THEMES.light)); setTasks(s.tasks||{}); setProjects(s.projects||[]); setYearProjects(s.yearProjects||[]); setShelf(s.shelf||[]); setBuckets(s.buckets||[]); setPurchases(s.purchases||[]); setRoutines(s.routines||[]); };
+  const applyShared=(s)=>{ setSharedTasks(s.sharedTasks||{}); };
 
   // 로그인 시: 개인 + 공용 두 채널을 불러옴
   const doLogin=async()=>{
@@ -135,20 +135,20 @@ export default function App(){
 
   // 개인 데이터 저장
   useEffect(()=>{ if(!loaded||!profile)return;
-    const payload={theme,cats,tasks,projects,yearProjects,shelf,buckets,purchases};
+    const payload={theme,cats,tasks,projects,yearProjects,shelf,buckets,purchases,routines};
     try{ localStorage.setItem("planner8_"+profile,JSON.stringify(payload)); }catch{}
     setSync("저장 중…");
     const h=setTimeout(async()=>{ try{ await sbSave(rowPersonal(profile),payload); setSync("동기화됨"); }catch{ setSync("오프라인(이 기기에만 저장)"); } },600);
     return ()=>clearTimeout(h);
-  },[theme,cats,tasks,projects,yearProjects,shelf,buckets,purchases,loaded,profile]);
+  },[theme,cats,tasks,projects,yearProjects,shelf,buckets,purchases,routines,loaded,profile]);
 
-  // 공용 데이터 저장 (부부 공유)
+  // 공용 데이터 저장 (부부 공유 — 공용 탭만)
   useEffect(()=>{ if(!loaded||!profile)return;
-    const payload={sharedTasks,routines};
+    const payload={sharedTasks};
     try{ localStorage.setItem("planner8_common",JSON.stringify(payload)); }catch{}
     const h=setTimeout(async()=>{ try{ await sbSave(ROW_COMMON,payload); }catch{} },600);
     return ()=>clearTimeout(h);
-  },[sharedTasks,routines,loaded,profile]);
+  },[sharedTasks,loaded,profile]);
 
   // 리마인더: 앱이 열려 있는 동안 개인+공용 일정의 알림 시간을 확인해서 알림 표시 (베스트 에포트)
   useEffect(()=>{ if(!profile)return;
@@ -194,15 +194,15 @@ export default function App(){
       {id:uid(),term:"mid",category:"가전",text:"로봇청소기",date:"2026-09-01",done:false},
       {id:uid(),term:"long",category:"자동차",text:"전기차 교체",date:"2027-06-01",done:false},
     ]);
+    setRoutines([
+      {id:uid(),title:"주말 집안일",items:[{id:uid(),text:"청소기 돌리기"},{id:uid(),text:"세탁 돌리기 + 널기"},{id:uid(),text:"일반쓰레기 모아서 배출"},{id:uid(),text:"유팡 소독기 돌리기"}]},
+      {id:uid(),title:"재택근무 루틴",items:[{id:uid(),text:"완력기 3세트"},{id:uid(),text:"아이패드로 강의/뉴스 듣기"},{id:uid(),text:"스탠딩 데스크 1시간"}]},
+    ]);
   };
   const seedShared=()=>{
     setSharedTasks({
       "2026-07-19":[{id:uid(),text:"가족 나들이 (공용)",cat:"c3",hour:11,pri:"mid",remind:1440,done:false,note:""}],
     });
-    setRoutines([
-      {id:uid(),title:"주말 집안일",items:[{id:uid(),text:"청소기 돌리기"},{id:uid(),text:"세탁 돌리기 + 널기"},{id:uid(),text:"일반쓰레기 모아서 배출"},{id:uid(),text:"유팡 소독기 돌리기"}]},
-      {id:uid(),title:"재택근무 루틴",items:[{id:uid(),text:"완력기 3세트"},{id:uid(),text:"아이패드로 강의/뉴스 듣기"},{id:uid(),text:"스탠딩 데스크 1시간"}]},
-    ]);
   };
   useEffect(()=>{ const acc=[C.a1,C.a2,C.a3,C.a4,"#6FA8DC","#E06C9F","#7FB069","#D98E2B"]; setCats(cs=>cs.map((c,i)=>({...c,color:acc[i%acc.length]}))); },[theme]); // eslint-disable-line
 
@@ -234,7 +234,7 @@ export default function App(){
           <input type="password" value={pass} onChange={e=>{setPass(e.target.value);setLoginErr("");}} onKeyDown={e=>{if(e.key==="Enter")doLogin();}} placeholder="공용 접속 코드" style={{...S.shelfInput,width:"100%",margin:"6px 0 10px 0"}}/>
           {loginErr&&<div style={{color:C.a1,fontSize:13,marginBottom:8}}>{loginErr}</div>}
           <button style={{...S.saveBtn,width:"100%",padding:"11px 0"}} onClick={doLogin}>들어가기</button>
-          <p style={{...S.shelfHint,marginTop:12,lineHeight:1.5}}>개인 탭(일정)은 각자 따로 저장되고, <b>공용 탭·루틴</b>은 부부가 함께 보고 동기화돼요.</p>
+          <p style={{...S.shelfHint,marginTop:12,lineHeight:1.5}}>개인 탭(일정)은 각자 따로 저장되고, <b>공용 탭</b>만 부부가 함께 보고 동기화돼요.</p>
         </div>
       </div>
     );
